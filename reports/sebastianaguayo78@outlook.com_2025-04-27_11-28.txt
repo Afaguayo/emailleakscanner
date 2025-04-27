@@ -1,0 +1,14 @@
+
+[DuckDuckGo] Possible public mentions:
+ 1. EOF
+
+[LeakCheck] Possible leaks found for sebastianaguayo78@outlook.com:
+ - Site: Twitter.com (scraping data) | Date: 2022-01 | Data: 
+ - Site: Luxottica | Date: 2021-03 | Data: 
+ - Site: Stealer Logs | Date:  | Data: 
+
+---
+Summary:
+- 1 public mentions
+- 0 possible leaks
+- Dark Web search: Skipped
