@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Leak Scanner</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --card: #ffffff;
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --faint: #86868b;
+    --line: rgba(0, 0, 0, 0.08);
+    --field: rgba(118, 118, 128, 0.12);
+    --accent: #0071e3;
+    --accent-press: #0062c4;
+    --bar: rgba(245, 245, 247, 0.72);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+    --green: #1f9d55; --yellow: #c77c02; --orange: #e0561b; --red: #d70015;
+    --skeleton: #e8e8ed; --skeleton-shine: #f2f2f5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --card: #1c1c1e;
+      --text: #f5f5f7;
+      --muted: #a1a1a6;
+      --faint: #8e8e93;
+      --line: rgba(255, 255, 255, 0.1);
+      --field: rgba(118, 118, 128, 0.24);
+      --accent: #0a84ff;
+      --accent-press: #409cff;
+      --bar: rgba(22, 22, 23, 0.72);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --green: #30d158; --yellow: #ffd60a; --orange: #ff9f0a; --red: #ff453a;
+      --skeleton: #1c1c1e; --skeleton-shine: #2c2c2e;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; min-height: 100vh;
+  }
+  button, input { font: inherit; color: inherit; }
+  a { color: var(--accent); text-decoration: none; cursor: pointer; }
+
+  /* ---------- header ---------- */
+  .bar {
+    position: sticky; top: 0; z-index: 10; background: var(--bar);
+    backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 0.5px solid transparent; transition: border-color .2s;
+  }
+  .bar.scrolled { border-bottom-color: var(--line); }
+  .bar-inner, main { max-width: 980px; margin: 0 auto; padding-inline: 28px; }
+  .bar-inner { padding-block: 22px 14px; }
+  .title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  h1 {
+    margin: 0; font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h1 svg { color: var(--accent); }
+  .tabs { display: flex; gap: 2px; background: var(--field); padding: 2px; border-radius: 10px; }
+  .tabs button {
+    border: 0; background: none; padding: 5px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500;
+  }
+  .tabs button.on { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+  .search { display: flex; gap: 10px; margin-top: 16px; }
+  .field {
+    flex: 1; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px;
+    border-radius: 12px; background: var(--field); transition: box-shadow .15s;
+  }
+  .field:focus-within { box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .field svg { flex: none; color: var(--faint); }
+  .field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 16px; }
+  .field input::placeholder { color: var(--faint); }
+  .btn {
+    height: 42px; border: 0; border-radius: 12px; padding: 0 18px; cursor: pointer; white-space: nowrap;
+    font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 6px;
+    transition: transform .1s, background .15s, opacity .15s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: .5; cursor: default; transform: none; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-press); }
+  .btn-soft { background: var(--field); color: var(--accent); height: 34px; font-size: 14px; padding: 0 14px; border-radius: 10px; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; min-height: 18px; }
+
+  /* ---------- content ---------- */
+  main { padding-block: 10px 56px; }
+  .card { background: var(--card); border-radius: 18px; box-shadow: var(--shadow); padding: 20px 22px; margin-top: 18px; animation: rise .4s cubic-bezier(.2,.8,.2,1) both; }
+  .card h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: -0.01em; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .card h2 small { color: var(--faint); font-weight: 500; font-size: 13px; }
+
+  .hero { display: flex; gap: 26px; align-items: center; flex-wrap: wrap; }
+  .gauge { position: relative; width: 132px; height: 132px; flex: none; }
+  .gauge svg { transform: rotate(-90deg); }
+  .gauge .num { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .gauge .num b { font-size: 34px; letter-spacing: -0.02em; display: block; line-height: 1; }
+  .gauge .num span { font-size: 12px; color: var(--muted); }
+  .hero-text { flex: 1; min-width: 240px; }
+  .hero-text .email { color: var(--muted); font-size: 14px; word-break: break-all; }
+  .hero-text .label { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 2px 0 8px; }
+  .stats { display: flex; gap: 22px; flex-wrap: wrap; }
+  .stat b { display: block; font-size: 22px; letter-spacing: -0.01em; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+  .sources { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+  .src { font-size: 12px; padding: 5px 10px; border-radius: 999px; background: var(--field); display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .src.ok .dot { background: var(--green); }
+  .src.err .dot { background: var(--orange); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px; background: var(--field); color: var(--text); }
+  .chip.hot { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); font-weight: 600; }
+  .chip.warm { background: color-mix(in srgb, var(--orange) 14%, transparent); color: var(--orange); }
+
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .tools .field { height: 34px; border-radius: 10px; flex: 1; min-width: 180px; }
+  .tools .field input { font-size: 14px; }
+  .toggle { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; cursor: pointer; user-select: none; }
+
+  .row { padding: 12px 0; border-top: 0.5px solid var(--line); }
+  .row:first-of-type { border-top: 0; }
+  .row-head { display: flex; align-items: baseline; gap: 10px; cursor: pointer; }
+  .row-head .name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-head .when { color: var(--faint); font-size: 13px; flex: none; }
+  .pw { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--yellow); align-self: center; }
+  .pw.yes { background: var(--red); }
+  .row .detail { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .row .chips { margin-top: 8px; }
+  .row .more { display: none; margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .row.open .more { display: block; }
+  .show-more { margin-top: 10px; }
+
+  .mention { padding: 10px 0; border-top: 0.5px solid var(--line); }
+  .mention:first-of-type { border-top: 0; }
+  .mention .t { font-weight: 600; }
+  .mention .u { font-size: 12px; color: var(--faint); word-break: break-all; }
+  .mention .sn { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  .advice { margin: 0; padding-left: 20px; }
+  .advice li { margin: 6px 0; }
+  .empty { color: var(--muted); font-size: 14px; }
+
+  /* skeleton */
+  .sk .line { height: 12px; border-radius: 6px; margin: 10px 0;
+    background: linear-gradient(90deg, var(--skeleton) 0%, var(--skeleton-shine) 50%, var(--skeleton) 100%);
+    background-size: 200% 100%; animation: shimmer 1.3s linear infinite; }
+
+  /* states */
+  .state { text-align: center; padding: 70px 20px; color: var(--muted); animation: rise .4s both; }
+  .state .icon { width: 72px; height: 72px; margin: 0 auto 18px; border-radius: 20px; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+  .state h2 { color: var(--text); font-size: 20px; margin: 0 0 6px; }
+  .state p { margin: 0 auto; max-width: 420px; }
+
+  .pw-result { margin-top: 16px; font-size: 16px; }
+  .pw-result b.bad { color: var(--red); } .pw-result b.good { color: var(--green); }
+  .note { color: var(--muted); font-size: 13px; margin-top: 12px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0;
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px;
+    transition: .25s; pointer-events: none; max-width: 90vw; }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+  .hidden { display: none !important; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  @media (max-width: 560px) {
+    .bar-inner, main { padding-inline: 16px; }
+    h1 { font-size: 24px; }
+    .card { padding: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <header class="bar" id="bar">
+    <div class="bar-inner">
+      <div class="title-row">
+        <h1>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 9.6 8 11 4.6-1.4 8-6 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.9-4.9 1.4 1.4-6.3 6.3Z"/></svg>
+          Email Leak Scanner
+        </h1>
+        <div class="tabs" role="tablist">
+          <button class="on" data-tab="scan">Email</button>
+          <button data-tab="password">Password</button>
+          <button data-tab="settings">Settings</button>
+        </div>
+      </div>
+      <form class="search" id="form" autocomplete="off">
+        <label class="field">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+          <input id="q" type="email" placeholder="you@example.com" aria-label="Email address" spellcheck="false">
+        </label>
+        <button class="btn btn-primary" id="go">Scan</button>
+      </form>
+      <div class="hint" id="hint">Checks XposedOrNot, LeakCheck, HaveIBeenPwned (with a key) and the public web. Only scan addresses you own.</div>
+    </div>
+  </header>
+
+  <main>
+    <section id="tab-scan"><div id="out"></div></section>
+
+    <section id="tab-password" class="hidden">
+      <div class="card">
+        <h2>Has a password leaked?</h2>
+        <form id="pwform" class="search" style="margin-top:0" autocomplete="off">
+          <label class="field">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <input id="pw" type="password" placeholder="Type a password" aria-label="Password">
+          </label>
+          <button class="btn btn-primary" id="pwgo">Check</button>
+        </form>
+        <div class="pw-result" id="pwres"></div>
+        <div class="note">Your password never leaves this computer. It is hashed with SHA-1 and only the first 5 characters of the hash are sent to Pwned Passwords, which returns every leaked hash starting with them; the match happens here.</div>
+      </div>
+    </section>
+
+    <section id="tab-settings" class="hidden">
+      <div class="card">
+        <h2>HaveIBeenPwned API key <small id="keystate"></small></h2>
+        <form id="keyform" class="search" style="margin-top:0" autocomplete="off">
+          <label class="field">
+            <input id="key" type="password" placeholder="Paste your key (leave empty to remove)" aria-label="HIBP API key">
+          </label>
+          <button class="btn btn-primary">Save</button>
+        </form>
+        <div class="note">Optional. HIBP charges for API keys (<a data-link="https://haveibeenpwned.com/API/Key">haveibeenpwned.com/API/Key</a>). The key is stored in <code>.emailleakscanner.json</code> in your home folder. XposedOrNot and LeakCheck work without any key.</div>
+      </div>
+      <div class="card">
+        <h2>About</h2>
+        <div class="note" style="margin-top:0" id="about"></div>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const $ = (id) => document.getElementById(id);
+const out = $("out"), q = $("q");
+let current = null, busy = false, shown = 40;
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n) => Number(n || 0).toLocaleString();
+const PW = new Set(["passwords", "password hints", "historical passwords", "auth tokens"]);
+const SENSITIVE = new Set(["social security numbers", "government ids", "partial government issued ids", "passport numbers",
+  "credit card details", "partial credit card data", "bank account numbers", "dates of birth", "physical addresses",
+  "phone numbers", "security questions and answers", "health information", "mothers maiden names"]);
+const RISK = { None: "var(--green)", Low: "var(--green)", Medium: "var(--yellow)", High: "var(--orange)", Critical: "var(--red)" };
+
+async function api(path, body) {
+  const res = await fetch(path, body === undefined
+    ? { headers: { "X-Token": TOKEN } }
+    : { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Something went wrong.");
+  return data;
+}
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 3200);
+}
+
+const chipClass = (d) => PW.has(d.toLowerCase()) ? "chip hot" : SENSITIVE.has(d.toLowerCase()) ? "chip warm" : "chip";
+const chips = (list) => `<div class="chips">${list.map((d) => `<span class="${chipClass(d)}">${esc(d)}</span>`).join("")}</div>`;
+const hasPw = (b) => b.data.some((d) => PW.has(d.toLowerCase()));
+
+function gauge(score, color) {
+  const r = 56, c = 2 * Math.PI * r;
+  return `<div class="gauge"><svg width="132" height="132"><circle cx="66" cy="66" r="${r}" fill="none" stroke="var(--field)" stroke-width="12"/>
+    <circle cx="66" cy="66" r="${r}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"
+      stroke-dasharray="${c}" stroke-dashoffset="${c}" style="transition:stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1)" data-to="${c * (1 - score / 100)}"/></svg>
+    <div class="num"><div><b>${score}</b><span>risk / 100</span></div></div></div>`;
+}
+
+function render(r) {
+  const risk = r.risk, color = RISK[risk.label];
+  const years = r.breaches.map((b) => b.date.slice(0, 4)).filter(Boolean).sort();
+  const sources = Object.entries(r.sources).map(([name, s]) => {
+    const cls = s.ok ? "ok" : s.skipped ? "" : "err";
+    const txt = s.ok ? `${fmt(s.count)} found` : s.skipped ? `skipped · ${s.error}` : s.error;
+    return `<span class="src ${cls}" title="${esc(txt)}"><span class="dot"></span>${esc(name)} <span style="color:var(--faint)">${esc(txt)}</span></span>`;
+  }).join("");
+  const headline = { None: "No leaks found", Low: "Low exposure", Medium: "Some exposure", High: "High exposure", Critical: "Heavily exposed" }[risk.label];
+
+  out.innerHTML = `
+    <div class="card">
+      <div class="hero">
+        ${gauge(risk.score, color)}
+        <div class="hero-text">
+          <div class="email">${esc(r.email)}</div>
+          <div class="label" style="color:${color}">${headline}</div>
+          <div class="stats">
+            <div class="stat"><b>${fmt(r.breaches.length)}</b><span>breaches</span></div>
+            <div class="stat"><b>${fmt(risk.password_breaches)}</b><span>with passwords</span></div>
+            <div class="stat"><b>${fmt(r.mentions.length)}</b><span>web mentions</span></div>
+            ${years.length ? `<div class="stat"><b>${years[0]}–${years[years.length - 1]}</b><span>first → latest</span></div>` : ""}
+          </div>
+          <div class="actions">
+            <button class="btn btn-soft" data-save="txt">Save report</button>
+            <button class="btn btn-soft" data-save="json">Save JSON</button>
+          </div>
+        </div>
+      </div>
+      <div class="sources">${sources}</div>
+    </div>
+    <div class="card"><h2>What to do</h2><ul class="advice">${r.advice.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>
+    ${r.exposed_data.length ? `<div class="card"><h2>Exposed data <small>red = passwords · orange = sensitive</small></h2>${chips(sortTypes(r.exposed_data))}</div>` : ""}
+    <div class="card" id="bcard"><h2>Breaches <small id="bcount"></small></h2>
+      ${r.breaches.length ? `<div class="tools">
+        <label class="field"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="filter" placeholder="Filter by site or data type"></label>
+        <label class="toggle"><input type="checkbox" id="onlypw"> Only with passwords</label>
+      </div><div id="blist"></div>` : `<div class="empty">No breaches found in the sources that answered.</div>`}
+    </div>
+    <div class="card"><h2>Public web mentions <small>pages whose text contains the address</small></h2>
+      ${r.mentions.length ? r.mentions.map((m) => `<div class="mention"><a class="t" data-link="${esc(m.url)}">${esc(m.title)}</a>
+        <div class="u">${esc(m.url)}</div>${m.snippet ? `<div class="sn">${esc(m.snippet)}</div>` : ""}</div>`).join("")
+        : `<div class="empty">${r.sources["Web search"]?.ok ? "None found." : "Web search didn't run: " + esc(r.sources["Web search"]?.error || "")}</div>`}
+    </div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => out.querySelectorAll("[data-to]").forEach((c) => c.style.strokeDashoffset = c.dataset.to)));
+  shown = 40;
+  if (r.breaches.length) {
+    $("filter").addEventListener("input", () => { shown = 40; renderBreaches(); });
+    $("onlypw").addEventListener("change", () => { shown = 40; renderBreaches(); });
+    renderBreaches();
+  }
+}
+
+function sortTypes(list) {
+  const rank = (d) => PW.has(d.toLowerCase()) ? 0 : SENSITIVE.has(d.toLowerCase()) ? 1 : 2;
+  return [...list].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+}
+
+function renderBreaches() {
+  const term = $("filter").value.trim().toLowerCase(), onlyPw = $("onlypw").checked;
+  const list = current.breaches.filter((b) => (!onlyPw || hasPw(b)) &&
+    (!term || (b.name + " " + b.domain + " " + b.data.join(" ")).toLowerCase().includes(term)));
+  $("bcount").textContent = list.length === current.breaches.length ? `${fmt(list.length)} total, newest first` : `${fmt(list.length)} of ${fmt(current.breaches.length)}`;
+  $("blist").innerHTML = list.slice(0, shown).map((b) => `
+    <div class="row">
+      <div class="row-head"><span class="pw ${hasPw(b) ? "yes" : ""}" title="${hasPw(b) ? "Passwords exposed" : "No passwords reported"}"></span>
+        <span class="name">${esc(b.name)}</span><span class="when">${esc(b.date)}</span></div>
+      ${b.data.length ? chips(sortTypes(b.data)) : ""}
+      <div class="more">
+        ${b.description ? `<div>${esc(b.description)}</div>` : ""}
+        <div class="detail">${[b.domain && `Site: ${esc(b.domain)}`, b.records && `${fmt(b.records)} accounts`, `Reported by ${esc(b.sources.join(", "))}`].filter(Boolean).join(" · ")}</div>
+      </div>
+    </div>`).join("") + (list.length > shown ? `<button class="btn btn-soft show-more" id="more">Show ${fmt(Math.min(100, list.length - shown))} more</button>` : "");
+  const more = $("more");
+  if (more) more.onclick = () => { shown += 100; renderBreaches(); };
+}
+
+function skeleton() {
+  const lines = (n) => Array.from({ length: n }, (_, i) => `<div class="line" style="width:${[90, 70, 80, 55][i % 4]}%"></div>`).join("");
+  out.innerHTML = `<div class="card sk">${lines(4)}</div><div class="card sk">${lines(3)}</div><div class="card sk">${lines(6)}</div>`;
+}
+
+function state(title, text, alert) {
+  const icon = alert
+    ? `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>`
+    : `<svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 9.6 8 11 4.6-1.4 8-6 8-11V5l-8-3Z"/></svg>`;
+  out.innerHTML = `<div class="state"><div class="icon">${icon}</div><h2>${esc(title)}</h2><p>${esc(text)}</p></div>`;
+}
+
+async function scan() {
+  const email = q.value.trim();
+  if (!email) { q.focus(); return; }
+  if (busy) return;
+  busy = true; $("go").disabled = true;
+  $("hint").textContent = `Scanning ${email}… this takes a few seconds.`;
+  skeleton();
+  try {
+    current = await api("/api/scan", { email });
+    $("hint").textContent = `Scanned ${current.email} at ${new Date(current.scanned_at).toLocaleTimeString()}`;
+    render(current);
+  } catch (err) {
+    $("hint").textContent = "Scan failed";
+    state("Couldn't scan that address", err.message, true);
+  } finally {
+    busy = false; $("go").disabled = false;
+  }
+}
+
+function showTab(name) {
+  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
+  ["scan", "password", "settings"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== name));
+  $("form").classList.toggle("hidden", name !== "scan");
+  $("hint").classList.toggle("hidden", name !== "scan");
+  if (name === "password") $("pw").focus();
+}
+
+async function loadSettings() {
+  try {
+    const s = await api("/api/settings");
+    $("keystate").textContent = s.hibp ? "· key saved" : "· not set";
+    $("about").innerHTML = `Version ${esc(s.version)}. Reports are saved to <code>${esc(s.folder)}</code>.<br>
+      Sources: XposedOrNot, LeakCheck, HaveIBeenPwned, DuckDuckGo, Pwned Passwords.<br>
+      <a data-link="https://github.com/Afaguayo/emailleakscanner">github.com/Afaguayo/emailleakscanner</a>`;
+  } catch {}
+}
+
+$("form").addEventListener("submit", (e) => { e.preventDefault(); scan(); });
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+window.addEventListener("scroll", () => $("bar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
+
+document.addEventListener("click", async (e) => {
+  const link = e.target.closest("[data-link]");
+  if (link) { e.preventDefault(); api(`/api/open?url=${encodeURIComponent(link.dataset.link)}`); return; }
+  const save = e.target.closest("[data-save]");
+  if (save && current) {
+    try { const { path } = await api("/api/save", { email: current.email, format: save.dataset.save }); toast("Saved " + path); }
+    catch (err) { toast(err.message); }
+    return;
+  }
+  const head = e.target.closest(".row-head");
+  if (head) head.parentNode.classList.toggle("open");
+});
+
+$("pwform").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pw = $("pw").value;
+  if (!pw) return;
+  $("pwgo").disabled = true; $("pwres").textContent = "Checking…";
+  try {
+    const { count } = await api("/api/password", { password: pw });
+    $("pwres").innerHTML = count
+      ? `<b class="bad">Seen ${fmt(count)} times in leaks.</b> Don't use this password anywhere.`
+      : `<b class="good">Not found in any known leak.</b> Still, use it on one site only.`;
+  } catch (err) { $("pwres").textContent = err.message; }
+  finally { $("pwgo").disabled = false; $("pw").value = ""; }
+});
+
+$("keyform").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const { hibp } = await api("/api/settings", { hibp_api_key: $("key").value });
+    $("key").value = ""; toast(hibp ? "HIBP key saved" : "HIBP key removed"); loadSettings();
+  } catch (err) { toast(err.message); }
+});
+
+state("Check your email", "Type an address above to see which data breaches it appears in, what leaked, and what to do about it.");
+loadSettings();
+q.focus();
+// index.html#scan=you@example.com starts a scan right away (handy for shortcuts and screenshots)
+if (location.hash.startsWith("#scan=")) { q.value = decodeURIComponent(location.hash.slice(6)); scan(); }
+</script>
+</body>
+</html>

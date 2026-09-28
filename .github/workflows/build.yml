@@ -1,0 +1,51 @@
+name: Test and build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write  # needed to publish releases on version tags
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest -v
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            file: dist/EmailLeakScanner.exe
+          - os: macos-latest
+            file: dist/EmailLeakScanner-macOS.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pyinstaller
+      - run: python build.py
+      - name: Zip the macOS app
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent dist/EmailLeakScanner.app dist/EmailLeakScanner-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EmailLeakScanner-${{ runner.os }}
+          path: ${{ matrix.file }}
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.file }}

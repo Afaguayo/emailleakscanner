@@ -1,4 +1,12 @@
-# Ignore environment variables
+# secrets and your scan results
 .env
+reports/
+*.txt
+!requirements.txt
+
+# Python / build output
 __pycache__/
 *.pyc
+build/
+dist/
+*.spec

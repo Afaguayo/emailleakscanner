@@ -1,4 +1,2 @@
-requests[socks]
-beautifulsoup4
-colorama
-python-dotenv
+# emailleakscanner.py itself needs nothing beyond the Python standard library.
+pywebview>=5  # native window for gui.py; without it the app opens in your browser
